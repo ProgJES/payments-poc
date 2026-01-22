@@ -2,6 +2,7 @@ package com.eunseok.payment.api.controller;
 
 import com.eunseok.payment.api.dto.CreatePaymentRequest;
 import com.eunseok.payment.api.dto.CreatePaymentResponse;
+import com.eunseok.payment.api.dto.GetPaymentResponse;
 import com.eunseok.payment.application.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,5 +25,10 @@ public class PaymentController {
             ) {
 
         return paymentService.createPayment(request, idempotencyKey);
+    }
+
+    @GetMapping("/{paymentId}")
+    public GetPaymentResponse get(@PathVariable String paymentId) {
+        return paymentService.getPayment(paymentId);
     }
 }

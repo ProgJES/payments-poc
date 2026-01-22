@@ -2,11 +2,14 @@ package com.eunseok.payment.application.service;
 
 import com.eunseok.payment.api.dto.CreatePaymentRequest;
 import com.eunseok.payment.api.dto.CreatePaymentResponse;
+import com.eunseok.payment.api.dto.GetPaymentResponse;
 import com.eunseok.payment.common.util.Strings;
 import com.eunseok.payment.domain.model.IdempotencyStatus;
 import com.eunseok.payment.infra.persistence.entity.IdempotencyKeyEntity;
 import com.eunseok.payment.infra.persistence.entity.PaymentEntity;
+import com.eunseok.payment.infra.persistence.entity.PaymentEventEntity;
 import com.eunseok.payment.infra.persistence.repository.IdempotencyKeyRepository;
+import com.eunseok.payment.infra.persistence.repository.PaymentEventRepository;
 import com.eunseok.payment.infra.persistence.repository.PaymentRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,8 +31,12 @@ import static org.flywaydb.core.internal.util.JsonUtils.toJson;
 @Service
 @AllArgsConstructor
 public class PaymentService {
+    // Repositories
     private final PaymentRepository paymentRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
+    private final PaymentEventRepository paymentEventRepository;
+
+    // Other services
     private final ObjectMapper objectMapper;
 
 
@@ -76,6 +83,7 @@ public class PaymentService {
             );
         }
 
+        // Create payment record
         PaymentEntity saved = paymentRepository.save(
                 PaymentEntity.createNew(
                         generatePaymentId(),
@@ -87,6 +95,22 @@ public class PaymentService {
                 )
         );
 
+        // Create payment event log
+        String payloadJson;
+        try {
+            payloadJson = objectMapper.writeValueAsString(req);
+        } catch (Exception e) {
+            payloadJson = "{}";
+        }
+        paymentEventRepository.save(
+                PaymentEventEntity.paymentCreated(
+                        saved.getPaymentId(),
+                        saved.getStatus(),
+                        payloadJson
+                )
+        );
+
+        // Generate response
         var response = new CreatePaymentResponse(
                 saved.getPaymentId(),
                 saved.getStatus(),
@@ -101,6 +125,23 @@ public class PaymentService {
         return response;
     }
 
+    @Transactional(readOnly = true)
+    public GetPaymentResponse getPayment(String paymentId) {
+        PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Payment not found: " + paymentId
+                ));
+        return new GetPaymentResponse(
+                payment.getPaymentId(),
+                payment.getStatus(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                payment.getCreatedAt()
+        );
+    }
+
+    /* In  service use private functions */
     private String toJson(CreatePaymentResponse response) {
         try {
             return objectMapper.writeValueAsString(response);
