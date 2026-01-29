@@ -3,10 +3,13 @@ package com.eunseok.payment.api.controller;
 import com.eunseok.payment.api.dto.CreatePaymentRequest;
 import com.eunseok.payment.api.dto.CreatePaymentResponse;
 import com.eunseok.payment.api.dto.GetPaymentResponse;
+import com.eunseok.payment.api.dto.PaymentEventResponse;
 import com.eunseok.payment.application.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/payments")
@@ -30,5 +33,10 @@ public class PaymentController {
     @GetMapping("/{paymentId}")
     public GetPaymentResponse get(@PathVariable String paymentId) {
         return paymentService.getPayment(paymentId);
+    }
+
+    @GetMapping("/{paymentId}/events")
+    public List<PaymentEventResponse> events(@PathVariable String paymentId) {
+        return paymentService.getPaymentEvents(paymentId);
     }
 }

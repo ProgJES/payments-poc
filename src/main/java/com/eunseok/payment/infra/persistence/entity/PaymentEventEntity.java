@@ -1,7 +1,9 @@
 package com.eunseok.payment.infra.persistence.entity;
 
 import com.eunseok.payment.domain.model.PaymentEventType;
+import com.eunseok.payment.domain.model.PaymentStatus;
 import jakarta.persistence.*;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.hibernate.type.Type;
@@ -10,6 +12,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "payment_events")
+@Getter
 public class PaymentEventEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,10 +26,12 @@ public class PaymentEventEntity {
     private PaymentEventType eventType;
 
     @Column(name = "from_status", length = 32)
-    private String fromStatus;
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus fromStatus;
 
     @Column(name = "to_status", length = 32)
-    private String toStatus;
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus toStatus;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", columnDefinition = "jsonb")
@@ -39,7 +44,7 @@ public class PaymentEventEntity {
 
     public static PaymentEventEntity paymentCreated(
             String paymentId,
-            String toStatus,
+            PaymentStatus toStatus,
             String payloadJson
     ) {
 

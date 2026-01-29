@@ -3,6 +3,7 @@ package com.eunseok.payment.application.service;
 import com.eunseok.payment.api.dto.CreatePaymentRequest;
 import com.eunseok.payment.api.dto.CreatePaymentResponse;
 import com.eunseok.payment.api.dto.GetPaymentResponse;
+import com.eunseok.payment.api.dto.PaymentEventResponse;
 import com.eunseok.payment.common.util.Strings;
 import com.eunseok.payment.domain.model.IdempotencyStatus;
 import com.eunseok.payment.infra.persistence.entity.IdempotencyKeyEntity;
@@ -20,10 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.HexFormat;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static java.util.Objects.hash;
 import static org.flywaydb.core.internal.util.JsonUtils.toJson;
@@ -172,5 +170,23 @@ public class PaymentService {
 
     private String generatePaymentId() {
         return UUID.randomUUID().toString();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentEventResponse> getPaymentEvents(String paymentId) {
+        boolean exists = paymentRepository.existsByPaymentId(paymentId);
+        if (!exists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found: " + paymentId);
+        }
+        return paymentEventRepository.findByPaymentIdOrderByCreatedAtAsc(paymentId)
+                .stream()
+                .map(e -> new PaymentEventResponse(
+                        e.getEventType(),
+                        e.getFromStatus(),
+                        e.getToStatus(),
+                        e.getPayload(),
+                        e.getCreatedAt()
+                ))
+                .toList();
     }
 }

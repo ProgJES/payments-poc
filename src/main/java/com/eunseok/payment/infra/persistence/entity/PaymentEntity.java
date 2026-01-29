@@ -1,5 +1,6 @@
 package com.eunseok.payment.infra.persistence.entity;
 
+import com.eunseok.payment.domain.model.PaymentStatus;
 import jakarta.persistence.*;
 
 import java.time.Instant;
@@ -27,7 +28,8 @@ public class PaymentEntity {
     private String currency;
 
     @Column(name = "status", nullable = false, length = 32)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus status;
 
     @Column(name = "description", length = 255)
     private String description;
@@ -56,7 +58,7 @@ public class PaymentEntity {
         e.paymentMethod = paymentMethod;
         e.amount = amount;
         e.currency = currency;
-        e.status = "INIT";
+        e.status = PaymentStatus.INIT;
         e.description = description;
         e.createdAt = now;
         e.updatedAt = now;
@@ -68,7 +70,7 @@ public class PaymentEntity {
         return paymentId;
     }
 
-    public String getStatus() {
+    public PaymentStatus getStatus() {
         return status;
     }
 
@@ -82,5 +84,15 @@ public class PaymentEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public void changeStatus(PaymentStatus newStatus) {
+        if (!this.status.canTransitionTo(newStatus)) {
+            throw new IllegalStateException(
+                    "Invalid status transition: " + this.status + " ->" + newStatus
+            );
+        }
+        this.status = newStatus;
+        this.updatedAt = Instant.now();
     }
 }
