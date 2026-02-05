@@ -1,4 +1,4 @@
-# Payment Service
+# Pyment Service
 
 A lightweight payment API designed with **idempotency**, **explicit state transitions**, and **event logging**.
 
@@ -29,7 +29,7 @@ INIT
 
 SETTLED
  └──> REVERSED
-
+```
 ---
 ## 📚 Documentation
 
