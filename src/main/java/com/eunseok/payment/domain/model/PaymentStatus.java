@@ -1,4 +1,14 @@
 package com.eunseok.payment.domain.model;
+/*
+ * Payment lifecycle actions:
+ *
+ * CREATE    - Create a payment record (initial state, no funds involved)
+ * AUTHORIZE - Reserve funds from the customer's payment method
+ * SETTLE    - Capture and finalize the reserved funds
+ * CANCEL   - Cancel the payment before funds are settled
+ * FAIL     - Mark the payment as failed
+ * REVERSE  - Refund a settled payment
+ */
 
 // Allowed transitions:
 // INIT -> AUTHORIZED | FAILED | CANCELED

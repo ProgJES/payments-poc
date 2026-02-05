@@ -58,5 +58,23 @@ public class PaymentEventEntity {
 
         return e;
     }
+
+    public static PaymentEventEntity stateChanged(
+            String paymentId,
+            PaymentEventType eventType,
+            PaymentStatus fromStatus,
+            PaymentStatus toStatus,
+            String payload
+    ) {
+        var e = new PaymentEventEntity();
+        e.paymentId = paymentId;
+        e.eventType = eventType;
+        e.fromStatus = fromStatus;
+        e.toStatus = toStatus;
+        e.payload = payload;
+        e.createdAt = Instant.now();
+
+        return e;
+    }
 }
 

@@ -1,11 +1,10 @@
 package com.eunseok.payment.application.service;
 
-import com.eunseok.payment.api.dto.CreatePaymentRequest;
-import com.eunseok.payment.api.dto.CreatePaymentResponse;
-import com.eunseok.payment.api.dto.GetPaymentResponse;
-import com.eunseok.payment.api.dto.PaymentEventResponse;
+import com.eunseok.payment.api.dto.*;
 import com.eunseok.payment.common.util.Strings;
 import com.eunseok.payment.domain.model.IdempotencyStatus;
+import com.eunseok.payment.domain.model.PaymentEventType;
+import com.eunseok.payment.domain.model.PaymentStatus;
 import com.eunseok.payment.infra.persistence.entity.IdempotencyKeyEntity;
 import com.eunseok.payment.infra.persistence.entity.PaymentEntity;
 import com.eunseok.payment.infra.persistence.entity.PaymentEventEntity;
@@ -21,10 +20,8 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.*;
-
-import static java.util.Objects.hash;
-import static org.flywaydb.core.internal.util.JsonUtils.toJson;
 
 @Service
 @AllArgsConstructor
@@ -36,7 +33,7 @@ public class PaymentService {
 
     // Other services
     private final ObjectMapper objectMapper;
-
+    private final PaymentEventWriter paymentEventWriter;
 
     @Transactional
     public CreatePaymentResponse createPayment(CreatePaymentRequest req, String idempotencyKey) {
@@ -94,12 +91,8 @@ public class PaymentService {
         );
 
         // Create payment event log
-        String payloadJson;
-        try {
-            payloadJson = objectMapper.writeValueAsString(req);
-        } catch (Exception e) {
-            payloadJson = "{}";
-        }
+        String payloadJson = safeJson(req);
+
         paymentEventRepository.save(
                 PaymentEventEntity.paymentCreated(
                         saved.getPaymentId(),
@@ -109,14 +102,14 @@ public class PaymentService {
         );
 
         // Generate response
-        var response = new CreatePaymentResponse(
+        CreatePaymentResponse response = new CreatePaymentResponse(
                 saved.getPaymentId(),
                 saved.getStatus(),
                 saved.getAmount(),
                 saved.getCurrency(),
                 saved.getCreatedAt()
         );
-        String responseJson = toJson(response);
+        String responseJson = safeJson(response);
         idem.markSucceeded(HttpStatus.CREATED.value(), responseJson);
         idempotencyKeyRepository.save(idem);
 
@@ -124,33 +117,19 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public GetPaymentResponse getPayment(String paymentId) {
+    public PaymentResponse getPayment(String paymentId) {
         PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Payment not found: " + paymentId
                 ));
-        return new GetPaymentResponse(
-                payment.getPaymentId(),
-                payment.getStatus(),
-                payment.getAmount(),
-                payment.getCurrency(),
-                payment.getCreatedAt()
-        );
+        return toResponse(payment);
     }
 
-    /* In  service use private functions */
-    private String toJson(CreatePaymentResponse response) {
-        try {
-            return objectMapper.writeValueAsString(response);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
 
     private String hash(CreatePaymentRequest request) {
         try {
-            String json = objectMapper.writeValueAsString(request);
+            String json = safeJson(request);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] bytes = digest.digest(json.getBytes(StandardCharsets.UTF_8));
 
@@ -188,5 +167,130 @@ public class PaymentService {
                         e.getCreatedAt()
                 ))
                 .toList();
+    }
+
+    @Transactional
+    public PaymentResponse authorize(String paymentId) {
+        PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        if (payment.getStatus() == PaymentStatus.AUTHORIZED) {
+            return toResponse(payment);
+        }
+
+        PaymentStatus oldStatus = payment.getStatus();
+        PaymentStatus newStatus = PaymentStatus.AUTHORIZED;
+        payment.changeStatus(newStatus);
+
+        String payloadJson = safeJson(Map.of(
+                "action", "authorized",
+                "at", Instant.now().toString()));
+
+        paymentEventWriter.statusChanged(payment, oldStatus, payloadJson);
+
+        return toResponse(payment);
+    }
+
+    public PaymentResponse settle(String paymentId) {
+        PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        if (payment.getStatus() == PaymentStatus.SETTLED) {
+            return toResponse(payment);
+        }
+
+        PaymentStatus oldStatus = payment.getStatus();
+        PaymentStatus newStatus = PaymentStatus.SETTLED;
+        payment.changeStatus(newStatus);
+
+        String payloadJson = safeJson(Map.of(
+           "action", "settle",
+           "at", Instant.now()
+        ));
+
+        paymentEventWriter.statusChanged(payment, oldStatus, payloadJson);
+        return toResponse(payment);
+    }
+
+    public PaymentResponse cancel(String paymentId) {
+        PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        if (payment.getStatus() == PaymentStatus.CANCELED) {
+            return toResponse(payment);
+        }
+
+        PaymentStatus oldStatus = payment.getStatus();
+        PaymentStatus newStatus = PaymentStatus.CANCELED;
+        payment.changeStatus(newStatus);
+
+        String payloadJson = safeJson(Map.of(
+                "action", "canceled",
+                "at", Instant.now()
+        ));
+
+        paymentEventWriter.statusChanged(payment, oldStatus, payloadJson);
+        return toResponse(payment);
+    }
+
+    public PaymentResponse fail(String paymentId) {
+        PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        if (payment.getStatus() == PaymentStatus.FAILED) {
+            return toResponse(payment);
+        }
+
+        PaymentStatus oldStatus = payment.getStatus();
+        PaymentStatus newStatus = PaymentStatus.FAILED;
+        payment.changeStatus(newStatus);
+
+        String payloadJson = safeJson(Map.of(
+                "action", "failed",
+                "at", Instant.now()
+        ));
+
+        paymentEventWriter.statusChanged(payment, oldStatus, payloadJson);
+        return toResponse(payment);
+    }
+
+    public PaymentResponse reverse(String paymentId) {
+        PaymentEntity payment = paymentRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        if (payment.getStatus() == PaymentStatus.REVERSED) {
+            return toResponse(payment);
+        }
+
+        PaymentStatus oldStatus = payment.getStatus();
+        PaymentStatus newStatus = PaymentStatus.REVERSED;
+        payment.changeStatus(newStatus);
+
+        String payloadJson = safeJson(Map.of(
+                "action", "reversed",
+                "at", Instant.now()
+        ));
+
+        paymentEventWriter.statusChanged(payment, oldStatus, payloadJson);
+        return toResponse(payment);
+    }
+    private PaymentResponse toResponse(PaymentEntity payment) {
+        return new PaymentResponse(
+                payment.getPaymentId(),
+                payment.getStatus(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                payment.getCreatedAt(),
+                payment.getUpdatedAt()
+        );
+    }
+
+
+    private String safeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ignore) {
+            return "{}";
+        }
     }
 }

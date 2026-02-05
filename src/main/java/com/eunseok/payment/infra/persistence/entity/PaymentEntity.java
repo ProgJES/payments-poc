@@ -2,6 +2,8 @@ package com.eunseok.payment.infra.persistence.entity;
 
 import com.eunseok.payment.domain.model.PaymentStatus;
 import jakarta.persistence.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 
@@ -86,10 +88,12 @@ public class PaymentEntity {
         return createdAt;
     }
 
+    public Instant getUpdatedAt() {return updatedAt; }
+
     public void changeStatus(PaymentStatus newStatus) {
         if (!this.status.canTransitionTo(newStatus)) {
             throw new IllegalStateException(
-                    "Invalid status transition: " + this.status + " ->" + newStatus
+                    "Invalid status transition: " + this.status + " -> " + newStatus
             );
         }
         this.status = newStatus;
