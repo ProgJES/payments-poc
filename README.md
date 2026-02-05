@@ -33,5 +33,6 @@ SETTLED
 ---
 ## 📚 Documentation
 
+- [API Endpoints](docs/api-endpoints.md)
 - [Payment Lifecycle](docs/payment-lifecycle.md)
 - [Idempotency Strategy](docs/idempotency-key.md)
