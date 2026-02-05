@@ -1,21 +1,31 @@
-# payments-poc
-Experimental payment system POC exploring payment flows, idempotency handling, and async gateway communication.
+# Payment Service
 
-## What this explores
-This project investigates how payment authorization and capture workflows can be modeled with idempotent APIs and async processing for external vendor notifications.
+A lightweight payment API designed with **idempotency**, **explicit state transitions**, and **event logging**.
 
-## Scope
-- Authorization → Capture → Refund flows
-- Idempotency key enforcement for duplicate requests
-- Async vendor communication
-- External gateway abstraction
+This project focuses on building a reliable payment core similar to real-world payment systems.
 
-## Domain Concepts
-- Authorization vs Capture
-- Retry + Idempotency at API boundary
-- Gateway vs Processor
-- Async vendor communication
+---
 
-## Notes
-- Not focused on production infrastructure
-- Domain and API behavior exploration only
+## ✨ Key Features
+
+- Idempotent payment creation (`POST /payments`)
+- Explicit payment lifecycle with validated state transitions
+- Event-based audit log (`payment_events`)
+- Consistent error handling via global exception handler
+
+---
+
+## 🔄 Payment Lifecycle
+
+```text
+INIT
+ ├──> AUTHORIZED
+ │      ├──> SETTLED
+ │      ├──> FAILED
+ │      └──> CANCELED
+ │
+ ├──> FAILED
+ └──> CANCELED
+
+SETTLED
+ └──> REVERSED
